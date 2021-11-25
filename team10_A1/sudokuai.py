@@ -2,6 +2,7 @@
 #  Software License, (See accompanying file LICENSE or copy at
 #  https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from math import inf
 import random
 import time
 from competitive_sudoku.sudoku import GameState, Move, SudokuBoard, TabooMove
@@ -39,11 +40,7 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
                         continue  # if (i) -> this move cannot be allowed
 
                     # (iv)
-                    # I assume now that TabooMove contains all previously considered taboo_moves as well,
-                    # have to check this tomorrow. If it turns out that taboo_moves only contain the
-                    # taboo moves for the current round, then I have to alter this function
-                    # Also if gamestate.moves contains all taboo moves (so also from this round), I can
-                    # do the checking of (i) and (iv) simultaneously by just looking at gamestate.moves
+                    # If a move has been considered taboo, don't consider this move
                     if TabooMove(i, j, value) in game_state.taboo_moves:
                         continue
 
@@ -91,27 +88,114 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
     # Evaluate function for a given game state, returns numerical score
 
     def evaluation_function(self, game_state: GameState):
-        pass
+        # for now, just return random int
+        return random.randint(-5, 5)
+
+    # implementation of minimax, using alpha-beta-pruning
+    def alpha_beta_pruning(self, N, game_state: GameState, depth, alpha, beta, isMaximizing, played_move=None):
+
+        # get all legal moves for current state
+        all_legal_moves = self.find_all_legal_moves(N, game_state)
+
+        if depth == 0 or not all_legal_moves:
+            # if we are at the specified depth or there are no more possible moves to play,
+            # evaluate the board position
+            evaluation_score = self.evaluation_function(game_state)
+            # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
+            #     evaluation_score, played_move, alpha, beta))
+            return {'move': played_move, 'score': evaluation_score}
+
+        if isMaximizing:
+            # so the first option will always be better
+            maxEval = {'move': 'default', 'score': -inf}
+            # recursively go through all children (child = board with legal move played)
+            # alpha and beta keep track of the best moves that can be played on other parts
+            # of the tree. If it is impossible to score better in the current part of the
+            # tree (from maximizing player's perspective), the search is stopped, and we
+            # look at the next region where there is still the possibility for improvement
+            for next_move in all_legal_moves:
+                child = game_state
+                # perform next move
+                child.board.put(next_move.i, next_move.j, next_move.value)
+                # get leaf-node evaluation score linked to this child as 'score',
+                # and keep track of what move this child represents in 'move'
+                child_evaluation = self.alpha_beta_pruning(
+                    N, child, depth-1, alpha, beta, False, next_move)
+                child_eval_score = child_evaluation['score']
+                # update maxEval if this child leads to a leaf node with higher score
+                if child_eval_score >= maxEval['score']:
+                    maxEval = child_evaluation
+                # keep track of highest score on this side of the tree
+                if child_eval_score >= alpha:
+                    alpha = child_eval_score
+                # if our opponent will certainly choose our sibling, stop searching here
+                if beta <= alpha:
+                    break
+
+            # This next if statement is there to decide what to return in ['move']
+            # if we are at the root node, then return the move of our favorite child (so e.g. (0,0) -> 1)
+            # if we are not at the root node return the move we represent ourselves.
+            # This is done to keep track of which move we should be playing when we get back to the top of the tree
+            if played_move:
+                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
+                #     maxEval['score'], played_move, alpha, beta))
+                return {'move': played_move, 'score': maxEval['score']}
+            else:
+                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
+                #     maxEval['score'], maxEval['move'], alpha, beta))
+                return maxEval
+
+        # recurively go through all children (child = board with legal move played)
+        # alpha and beta keep track of the best moves that can be played on other parts
+        # of the tree. If it is impossible to score better in the current part of the
+        # tree (from minimizing player's perspective), the search is stopped, and we
+        # look at the next region where there is still the possibility for improvement
+        else:
+            minEval = {'move': 'default', 'score': inf}
+            for next_move in all_legal_moves:
+                child = game_state
+                # perform next move
+                child.board.put(next_move.i, next_move.j, next_move.value)
+                # get leaf-node evaluation score linked to this child as 'score',
+                # and keep track of what move this child represents in 'move'
+                child_evaluation = self.alpha_beta_pruning(
+                    N, child, depth-1, alpha, beta, True, next_move)
+                child_eval_score = child_evaluation['score']
+                # update minEval if this child leads to a leaf node with lower score
+                if child_eval_score <= minEval['score']:
+                    minEval = child_evaluation
+                # keep track of lowest score on this side of the tree
+                if child_eval_score <= minEval['score']:
+                    beta = child_eval_score
+                # if our opponent will certainly choose our sibling, stop searching here
+                if beta <= alpha:
+                    break
+
+            # This next if statement is there to decide what to return in ['move']
+            # if we are at the root node, then return the move of our favorite child (so e.g. (0,0) -> 1)
+            # if we are not at the root node return the move we represent ourselves.
+            # This is done to keep track of which move we should be playing when we get back to the top of the tree
+            if played_move:
+                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
+                #     minEval['score'], played_move, alpha, beta))
+                return {'move': played_move, 'score': minEval['score']}
+            else:
+                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
+                #     minEval['score'], minEval['move'], alpha, beta))
+                return minEval
 
     # Function that looks for the best move using (a variant of) minimax
     def compute_best_move(self, game_state: GameState) -> None:
 
         N = game_state.board.N
 
-        for moves in game_state.taboo_moves:
-            if moves in game_state.moves:
-                print('yes')
-            else:
-                print('no')
-        # if i can distinguish between taboo and regular made moves, i need to alter (iv)
+        # I want to include something like iterative deepening to go to lower and lower depths
+        # but for now this suffices
+        best_move = self.alpha_beta_pruning(
+            N, game_state, 5, -inf, inf, True)['move']
 
-        all_legal_moves = self.find_all_legal_moves(N, game_state)
-        self.propose_move(random.choice(all_legal_moves))
-
-        print('taboo moves:', game_state.taboo_moves)
-        for move in all_legal_moves:
-            print('Move: ({},{}) -> {}'.format(move.i+1, move.j+1, move.value))
+        self.propose_move(best_move)
 
         while True:
             time.sleep(0.2)
-            self.propose_move(random.choice(all_legal_moves))
+            self.propose_move(best_move)
