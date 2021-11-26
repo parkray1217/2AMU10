@@ -4,6 +4,7 @@
 
 from math import inf
 import random
+from copy import deepcopy
 import time
 from competitive_sudoku.sudoku import GameState, Move, SudokuBoard, TabooMove
 import competitive_sudoku.sudokuai
@@ -101,8 +102,8 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
             # if we are at the specified depth or there are no more possible moves to play,
             # evaluate the board position
             evaluation_score = self.evaluation_function(game_state)
-            # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
-            #     evaluation_score, played_move, alpha, beta))
+            # print('returning at the top: move: {}, score: {}, depth: {}, all_legal_moves: {}'.format(
+            #     played_move, evaluation_score, depth, all_legal_moves))
             return {'move': played_move, 'score': evaluation_score}
 
         if isMaximizing:
@@ -114,7 +115,7 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
             # tree (from maximizing player's perspective), the search is stopped, and we
             # look at the next region where there is still the possibility for improvement
             for next_move in all_legal_moves:
-                child = game_state
+                child = deepcopy(game_state)
                 # perform next move
                 child.board.put(next_move.i, next_move.j, next_move.value)
                 # get leaf-node evaluation score linked to this child as 'score',
@@ -137,12 +138,12 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
             # if we are not at the root node return the move we represent ourselves.
             # This is done to keep track of which move we should be playing when we get back to the top of the tree
             if played_move:
-                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
-                #     maxEval['score'], played_move, alpha, beta))
+                # print("Returning after if played_move, move: {}, score: {}, depth: {}".format(
+                #     played_move, maxEval['score'], depth))
                 return {'move': played_move, 'score': maxEval['score']}
             else:
-                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
-                #     maxEval['score'], maxEval['move'], alpha, beta))
+                # print("Returning maxEval: move: {}, score: {}, depth: {}".format(
+                #     maxEval['move'], maxEval['score'], depth))
                 return maxEval
 
         # recurively go through all children (child = board with legal move played)
@@ -153,7 +154,7 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
         else:
             minEval = {'move': 'default', 'score': inf}
             for next_move in all_legal_moves:
-                child = game_state
+                child = deepcopy(game_state)
                 # perform next move
                 child.board.put(next_move.i, next_move.j, next_move.value)
                 # get leaf-node evaluation score linked to this child as 'score',
@@ -176,12 +177,12 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
             # if we are not at the root node return the move we represent ourselves.
             # This is done to keep track of which move we should be playing when we get back to the top of the tree
             if played_move:
-                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
-                #     minEval['score'], played_move, alpha, beta))
+                # print("Returning after if played_move, move: {}, score: {},depth: {}".format(
+                #     played_move, minEval['score'], depth))
                 return {'move': played_move, 'score': minEval['score']}
             else:
-                # print("Score: {}, Move: {}, alpha: {}, beta: {}".format(
-                #     minEval['score'], minEval['move'], alpha, beta))
+                # print("Returning minEval: move: {}, score: {}, depth: {}".format(
+                #     minEval['move'], minEval['score'], depth))
                 return minEval
 
     # Function that looks for the best move using (a variant of) minimax
@@ -189,13 +190,20 @@ class SudokuAI(competitive_sudoku.sudokuai.SudokuAI):
 
         N = game_state.board.N
 
-        # I want to include something like iterative deepening to go to lower and lower depths
-        # but for now this suffices
-        best_move = self.alpha_beta_pruning(
-            N, game_state, 5, -inf, inf, True)['move']
-
-        self.propose_move(best_move)
-
+        # search for the best move using iterative deepening
+        # It is important to keep making deepcopy's of the game_state
+        # to prevent from evaltuating the wrong situations at the wrong moments
+        # I plan to also use transposition tables, but if I don't get around to that, this
+        # is a nice start
+        depth = 1
         while True:
-            time.sleep(0.2)
+
+            best_move = self.alpha_beta_pruning(
+                N, deepcopy(game_state), depth, -inf, inf, True)['move']
+            print('best_move: {}, depth: {}, type: {}'.format(
+                best_move, depth, type(best_move)))
+
             self.propose_move(best_move)
+            # In testing at least, there are a lot of searches that are not really necessary,
+            # maybe consider stopping the search if the terminal depth has been reached
+            depth += 1
